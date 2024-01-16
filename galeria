@@ -15,12 +15,20 @@ contract ArtGallery is ERC721 {
         string imageURI;
         uint256 price;
         bool isForSale;
+        bool isForAuction;
+        address auctioner;
+        uint256 currentBid;
     }
 
     mapping(uint256 => Artwork) public artworks;
 
     event ArtworkCreated(uint256 indexed tokenId, string title, string artist);
     event ArtworkSold(uint256 indexed tokenId, address indexed buyer, uint256 price);
+
+    event ArtworkAuctionCreated(uint256 indexed tokenId, string title, uint256 minBid);
+    event ArtworkAuctionBid(uint256 indexed tokenId, string title, address indexed buyer, uint256 bid);
+    event ArtworkAuctionEnd(uint256 indexed tokenId, string title, address indexed buyer, uint256 bid);
+    event ArtworkAuctionCancelled(uint256 indexed tokenId, string title);
 
     constructor() ERC721("Artwork", "ART") {
         owner = msg.sender;
@@ -49,7 +57,10 @@ contract ArtGallery is ERC721 {
             description: _description,
             imageURI: _imageURI,
             price: _price,
-            isForSale: false
+            isForSale: false,
+            isForAuction: false,
+            auctioner: msg.sender,
+            currentBid: 0
         });
 
         artworks[tokenId] = newArtwork;
@@ -59,7 +70,9 @@ contract ArtGallery is ERC721 {
 
     function putArtworkForSale(uint256 _tokenId, uint256 _price) public {
         require(ownerOf(_tokenId) == msg.sender, "You are not the owner of this artwork");
-
+        require(artworks[_tokenId].isForSale == false, "The artwork is currently on sale");
+        require(artworks[_tokenId].isForAuction == false, "The artwork is currently on auction");
+        
         artworks[_tokenId].isForSale = true;
         artworks[_tokenId].price = _price;
     }
@@ -79,4 +92,51 @@ contract ArtGallery is ERC721 {
 
         emit ArtworkSold(_tokenId, buyer, price);
     }
+
+    function putArtworkForAuction(uint256 _tokenId, uint256 _price) public {
+        require(ownerOf(_tokenId) == msg.sender, "You are not the owner of this artwork");
+        require(artworks[_tokenId].isForSale == false, "The artwork is currently on sale");
+        require(artworks[_tokenId].isForAuction == false, "The artwork is currently on auction");
+
+        artworks[_tokenId].isForAuction = true;
+        artworks[_tokenId].auctioner = msg.sender;
+        artworks[_tokenId].currentBid = _price;
+
+        emit ArtworkAuctionCreated(_tokenId, artworks[_tokenId].title, _price);
+    }
+
+    function bidArtwork(uint256 _tokenId) public payable{
+        require(artworks[_tokenId].isForAuction == true, "The artwork is not on auction");
+        require(ownerOf(_tokenId) != msg.sender, "Can't bid for owned artwork");
+        require(artworks[_tokenId].currentBid < msg.value, "Low bid");
+
+        if (ownerOf(_tokenId) != artworks[_tokenId].auctioner) {
+            payable(artworks[_tokenId].auctioner).transfer(artworks[_tokenId].currentBid);
+        }
+        
+        artworks[_tokenId].auctioner = msg.sender;
+        artworks[_tokenId].currentBid = msg.value;
+
+        emit ArtworkAuctionBid(_tokenId, artworks[_tokenId].title, msg.sender, msg.value);
+    }
+
+    function endArtworkAuction(uint256 _tokenId) public{
+        require(ownerOf(_tokenId) == msg.sender, "You are not the owner of this artwork");
+        require(artworks[_tokenId].isForAuction == true, "The artwork is not on auction");
+
+        if (artworks[_tokenId].auctioner != msg.sender){
+            payable(ownerOf(_tokenId)).transfer(artworks[_tokenId].currentBid);
+
+            _transfer(ownerOf(_tokenId), artworks[_tokenId].auctioner, _tokenId); 
+
+            emit ArtworkAuctionEnd(_tokenId, artworks[_tokenId].title, msg.sender, artworks[_tokenId].currentBid);
+        }else {
+            emit ArtworkAuctionCancelled(_tokenId, artworks[_tokenId].title);
+        }
+
+        artworks[_tokenId].isForAuction = false;
+        artworks[_tokenId].currentBid = 0;      
+    }
+
+
 }
