@@ -138,5 +138,16 @@ contract ArtGallery is ERC721 {
         artworks[_tokenId].currentBid = 0;      
     }
 
+    function isArtworkOnAuction(uint256 _tokenId) public view returns (bool){
+        return artworks[_tokenId].isForAuction;
+    }
+
+    function maxArtworkAuctioner(uint256 _tokenId) public view returns (address){
+        return artworks[_tokenId].auctioner;
+    }
+
+    function currentArtworkBid(uint256 _tokenId) public view returns (uint256){
+        return artworks[_tokenId].currentBid;
+    }
 
 }
