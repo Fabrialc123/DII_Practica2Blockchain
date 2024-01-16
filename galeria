@@ -1,0 +1,82 @@
+// SPDX-License-Identifier: GPL-3.0
+
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+
+contract ArtGallery is ERC721 {
+    address public owner;
+    uint256 public totalArtworks;
+
+    struct Artwork {
+        string title;
+        string artist;
+        string description;
+        string imageURI;
+        uint256 price;
+        bool isForSale;
+    }
+
+    mapping(uint256 => Artwork) public artworks;
+
+    event ArtworkCreated(uint256 indexed tokenId, string title, string artist);
+    event ArtworkSold(uint256 indexed tokenId, address indexed buyer, uint256 price);
+
+    constructor() ERC721("Artwork", "ART") {
+        owner = msg.sender;
+    }
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only the owner can perform this action");
+        _;
+    }
+
+    function createArtwork(
+        string memory _title,
+        string memory _artist,
+        string memory _description,
+        string memory _imageURI,
+        uint256 _price
+    ) public onlyOwner {
+        totalArtworks++;
+
+        uint256 tokenId = totalArtworks;
+        _mint(msg.sender, tokenId);
+
+        Artwork memory newArtwork = Artwork({
+            title: _title,
+            artist: _artist,
+            description: _description,
+            imageURI: _imageURI,
+            price: _price,
+            isForSale: false
+        });
+
+        artworks[tokenId] = newArtwork;
+
+        emit ArtworkCreated(tokenId, _title, _artist);
+    }
+
+    function putArtworkForSale(uint256 _tokenId, uint256 _price) public {
+        require(ownerOf(_tokenId) == msg.sender, "You are not the owner of this artwork");
+
+        artworks[_tokenId].isForSale = true;
+        artworks[_tokenId].price = _price;
+    }
+
+    function buyArtwork(uint256 _tokenId) public payable {
+        require(artworks[_tokenId].isForSale, "This artwork is not for sale");
+        require(msg.value >= artworks[_tokenId].price, "Insufficient funds");
+
+        address payable seller = payable(ownerOf(_tokenId));
+        address buyer = msg.sender;
+        uint256 price = artworks[_tokenId].price;
+
+        _transfer(seller, buyer, _tokenId);
+        artworks[_tokenId].isForSale = false;
+
+        seller.transfer(price);
+
+        emit ArtworkSold(_tokenId, buyer, price);
+    }
+}
